@@ -7,6 +7,8 @@ from database import (
     update_session_title,
     delete_session,
     add_chat_message,
+    update_chat_message,
+    delete_messages_after,
     get_chat_messages,
 )
 from agent import run_agent_turn
@@ -64,7 +66,7 @@ def chat():
         session_id = create_session(title="New chat")
 
     # Record user message in DB
-    add_chat_message(session_id, "user", message)
+    user_msg_id = add_chat_message(session_id, "user", message)
 
     # Load complete message history for this session
     history = get_chat_messages(session_id)
@@ -73,7 +75,7 @@ def chat():
     reply = run_agent_turn(history)
 
     # Record assistant reply in DB
-    add_chat_message(session_id, "assistant", reply)
+    asst_msg_id = add_chat_message(session_id, "assistant", reply)
 
     # Auto-generate a smart title if it's the initial "New chat"
     current_session = get_session(session_id)
@@ -88,8 +90,52 @@ def chat():
     return jsonify({
         "response": reply,
         "session_id": session_id,
-        "title": title
+        "title": title,
+        "user_message_id": user_msg_id,
+        "assistant_message_id": asst_msg_id
     })
+
+@app.route("/api/chat/edit", methods=["POST"])
+def chat_edit():
+    """Handles ChatGPT-style prompt edit: updates the prompt, clears subsequent replies, and regenerates."""
+    data = request.json or {}
+    session_id = data.get("session_id")
+    message_id = data.get("message_id")
+    new_message = data.get("message", "").strip()
+
+    if not new_message:
+        return jsonify({"error": "Empty message"}), 400
+
+    if not session_id or not get_session(session_id):
+        session_id = create_session(title="New chat")
+
+    if message_id:
+        update_chat_message(message_id, new_message)
+        delete_messages_after(session_id, message_id)
+    else:
+        message_id = add_chat_message(session_id, "user", new_message)
+
+    # Re-run agent from this point
+    history = get_chat_messages(session_id)
+    reply = run_agent_turn(history)
+    asst_id = add_chat_message(session_id, "assistant", reply)
+
+    return jsonify({
+        "response": reply,
+        "session_id": session_id,
+        "user_message_id": message_id,
+        "assistant_message_id": asst_id
+    })
+
+@app.route("/api/messages/<int:message_id>", methods=["PATCH"])
+def patch_message(message_id):
+    """Updates a message in-place without regenerating."""
+    data = request.json or {}
+    new_content = data.get("content", "").strip()
+    if not new_content:
+        return jsonify({"error": "Content cannot be empty"}), 400
+    update_chat_message(message_id, new_content)
+    return jsonify({"status": "ok", "message_id": message_id, "content": new_content})
 
 # Legacy endpoints for backward compatibility
 @app.route("/chat", methods=["POST"])

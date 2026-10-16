@@ -346,6 +346,38 @@
         </div>
     </div>
 
+    <!-- ChatGPT-style Share Message Modal -->
+    <div class="modal-backdrop" id="share-modal-backdrop">
+        <div class="modal-box" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3>Share message</h3>
+                <button class="auth-close-btn" id="share-close-btn" title="Close" style="position: static; padding: 4px;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Message preview:</p>
+                <div class="share-preview-card" id="share-preview-text"></div>
+                
+                <div class="share-copy-input-group">
+                    <input type="text" class="share-copy-input" id="share-link-input" readonly>
+                    <button type="button" class="share-copy-btn" id="share-copy-link-btn">
+                        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        <span>Copy</span>
+                    </button>
+                </div>
+
+                <button type="button" class="share-native-btn" id="share-native-btn" style="display: none;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    <span>Share via external apps...</span>
+                </button>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn btn-cancel" id="share-done-btn">Done</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 

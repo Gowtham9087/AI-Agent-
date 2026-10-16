@@ -76,15 +76,36 @@ def delete_session(session_id: str):
     conn.commit()
     conn.close()
 
-def add_chat_message(session_id: str, role: str, content: str):
+def add_chat_message(session_id: str, role: str, content: str) -> int:
     conn = get_conn()
-    conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
         (session_id, role, content)
     )
+    msg_id = cur.lastrowid
     conn.execute(
         "UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?",
         (session_id,)
+    )
+    conn.commit()
+    conn.close()
+    return msg_id
+
+def update_chat_message(message_id: int, content: str):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE messages SET content = ? WHERE id = ?",
+        (content, message_id)
+    )
+    conn.commit()
+    conn.close()
+
+def delete_messages_after(session_id: str, message_id: int):
+    conn = get_conn()
+    conn.execute(
+        "DELETE FROM messages WHERE session_id = ? AND id > ?",
+        (session_id, message_id)
     )
     conn.commit()
     conn.close()
@@ -92,7 +113,7 @@ def add_chat_message(session_id: str, role: str, content: str):
 def get_chat_messages(session_id: str) -> list:
     conn = get_conn()
     rows = conn.execute(
-        "SELECT role, content, created_at FROM messages WHERE session_id = ? ORDER BY id ASC",
+        "SELECT id, role, content, created_at FROM messages WHERE session_id = ? ORDER BY id ASC",
         (session_id,)
     ).fetchall()
     conn.close()
