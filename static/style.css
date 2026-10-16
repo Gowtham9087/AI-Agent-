@@ -1,0 +1,14 @@
+/* ==================== FRIDAY AI - MODULAR STYLES ====================
+   Code is cleanly separated across modular CSS files for easy maintenance:
+   - /static/css/base.css    : Design tokens, resets, layout shell
+   - /static/css/sidebar.css : Sidebar, chat history, user profile, popover menu
+   - /static/css/chat.css    : Chat stream, markdown typography, code blocks, actions
+   - /static/css/prompt.css  : Prompt input, mic button, send button, voice toggle
+   - /static/css/modals.css  : Delete modal, ChatGPT login modal, settings, toasts
+======================================================================== */
+
+@import url('/static/css/base.css');
+@import url('/static/css/sidebar.css');
+@import url('/static/css/chat.css');
+@import url('/static/css/prompt.css');
+@import url('/static/css/modals.css');
