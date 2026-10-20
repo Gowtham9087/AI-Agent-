@@ -1,3 +1,5 @@
+<img width="1919" height="907" alt="Screenshot 2026-10-20 135557" src="https://github.com/user-attachments/assets/9631e38a-20eb-4df0-bc0f-3e4ab9367f2a" />
+<img width="1919" height="904" alt="Screenshot 2026-10-20 135544" src="https://github.com/user-attachments/assets/87be82ba-9371-4c2e-b9f8-e5d332d49bcd" />
 # 🔥 FRIDAY — Advanced AI Assistant & Support Agent
 
 An intelligent, full-stack, multi-turn AI assistant designed with a modern **ChatGPT-inspired interface**. Powered locally by **Ollama (`llama3.2`)**, featuring multimodal vision reasoning, page-by-page PDF document intelligence, real-time web search, voice speech synthesis & recognition, and persistent conversation history.
