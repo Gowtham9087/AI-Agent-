@@ -24,9 +24,14 @@ def init_db():
         session_id TEXT,
         role TEXT,
         content TEXT,
+        attachments TEXT DEFAULT '',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (session_id) REFERENCES sessions (session_id) ON DELETE CASCADE
     )""")
+    try:
+        c.execute("ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT ''")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -76,12 +81,12 @@ def delete_session(session_id: str):
     conn.commit()
     conn.close()
 
-def add_chat_message(session_id: str, role: str, content: str) -> int:
+def add_chat_message(session_id: str, role: str, content: str, attachments: str = "") -> int:
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-        (session_id, role, content)
+        "INSERT INTO messages (session_id, role, content, attachments) VALUES (?, ?, ?, ?)",
+        (session_id, role, content, attachments or "")
     )
     msg_id = cur.lastrowid
     conn.execute(
@@ -92,12 +97,18 @@ def add_chat_message(session_id: str, role: str, content: str) -> int:
     conn.close()
     return msg_id
 
-def update_chat_message(message_id: int, content: str):
+def update_chat_message(message_id: int, content: str, attachments: str = None):
     conn = get_conn()
-    conn.execute(
-        "UPDATE messages SET content = ? WHERE id = ?",
-        (content, message_id)
-    )
+    if attachments is not None:
+        conn.execute(
+            "UPDATE messages SET content = ?, attachments = ? WHERE id = ?",
+            (content, attachments, message_id)
+        )
+    else:
+        conn.execute(
+            "UPDATE messages SET content = ? WHERE id = ?",
+            (content, message_id)
+        )
     conn.commit()
     conn.close()
 
@@ -113,7 +124,7 @@ def delete_messages_after(session_id: str, message_id: int):
 def get_chat_messages(session_id: str) -> list:
     conn = get_conn()
     rows = conn.execute(
-        "SELECT id, role, content, created_at FROM messages WHERE session_id = ? ORDER BY id ASC",
+        "SELECT id, role, content, attachments, created_at FROM messages WHERE session_id = ? ORDER BY id ASC",
         (session_id,)
     ).fetchall()
     conn.close()

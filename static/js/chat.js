@@ -7,8 +7,20 @@ const FridayChat = (function() {
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
 
+    // Attachments & Lightbox elements
+    const attachBtn = document.getElementById('attach-btn');
+    const fileInput = document.getElementById('file-input');
+    const attachmentsPreviewStrip = document.getElementById('attachments-preview-strip');
+    const lightboxBackdrop = document.getElementById('media-lightbox-backdrop');
+    const lightboxContent = document.getElementById('lightbox-content');
+    const lightboxCloseBtn = document.getElementById('lightbox-close-btn');
+
+    let queuedAttachments = [];
+
     const ICON_AI_AVATAR = `<img src="/static/logo.png" alt="Friday" class="friday-avatar-img">`;
     const ICON_SPEAKER_SMALL = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
+    const ICON_FILE_DOC = `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+    const ICON_PDF = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="#EF4444" fill-opacity="0.18" stroke="#EF4444" stroke-width="1.8"></path><polyline points="14 2 14 8 20 8" stroke="#EF4444" stroke-width="1.8"></polyline><text x="7" y="16.5" fill="#EF4444" font-size="6" font-weight="800" font-family="sans-serif">PDF</text></svg>`;
 
     // Configure Marked Markdown parser
     if (window.marked) {
@@ -24,6 +36,131 @@ const FridayChat = (function() {
                 return code;
             }
         });
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function updateSendButtonState() {
+        if (!sendBtn || !userInput) return;
+        const hasText = userInput.value.trim().length > 0;
+        const hasFiles = queuedAttachments.length > 0;
+        sendBtn.disabled = !hasText && !hasFiles;
+    }
+
+    function renderAttachmentsPreview() {
+        if (!attachmentsPreviewStrip) return;
+        attachmentsPreviewStrip.innerHTML = '';
+
+        if (queuedAttachments.length === 0) {
+            attachmentsPreviewStrip.style.display = 'none';
+            updateSendButtonState();
+            return;
+        }
+
+        attachmentsPreviewStrip.style.display = 'flex';
+
+        queuedAttachments.forEach((att, index) => {
+            const chip = document.createElement('div');
+            chip.className = `preview-chip ${att.type === 'image' ? 'preview-chip-image' : 'preview-chip-file'}`;
+
+            if (att.type === 'image') {
+                chip.innerHTML = `
+                    <img src="${att.url}" alt="${att.filename}">
+                    <button type="button" class="preview-remove-btn" title="Remove attachment" data-index="${index}">✕</button>
+                `;
+            } else {
+                const isPdf = att.type === 'pdf' || (att.filename && att.filename.toLowerCase().endsWith('.pdf'));
+                const icon = isPdf ? ICON_PDF : ICON_FILE_DOC;
+                const typeText = isPdf ? 'PDF Document • ' : '';
+                chip.innerHTML = `
+                    <div class="file-icon">${icon}</div>
+                    <div class="file-meta">
+                        <span class="file-name" title="${att.filename}">${att.filename}</span>
+                        <span class="file-size">${typeText}${formatBytes(att.size)}</span>
+                    </div>
+                    <button type="button" class="preview-remove-btn" title="Remove attachment" data-index="${index}">✕</button>
+                `;
+            }
+
+            chip.querySelector('.preview-remove-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                queuedAttachments.splice(index, 1);
+                renderAttachmentsPreview();
+                updateSendButtonState();
+            });
+
+            attachmentsPreviewStrip.appendChild(chip);
+        });
+
+        updateSendButtonState();
+    }
+
+    async function uploadFiles(files) {
+        if (!files || files.length === 0) return;
+        const formData = new FormData();
+        Array.from(files).forEach(f => formData.append('files', f));
+
+        if (window.FridayAuth && window.FridayAuth.showToast) {
+            window.FridayAuth.showToast(`Uploading ${files.length} file(s)...`);
+        }
+
+        try {
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.files && data.files.length > 0) {
+                queuedAttachments = queuedAttachments.concat(data.files);
+                renderAttachmentsPreview();
+                if (userInput) userInput.focus();
+            } else if (data.error) {
+                if (window.FridayAuth && window.FridayAuth.showToast) {
+                    window.FridayAuth.showToast(`⚠️ ${data.error}`);
+                }
+            }
+        } catch (err) {
+            console.error('File upload failed:', err);
+            if (window.FridayAuth && window.FridayAuth.showToast) {
+                window.FridayAuth.showToast('⚠️ File upload failed');
+            }
+        }
+    }
+
+    function openMediaLightbox(type, url, name) {
+        if (!lightboxBackdrop || !lightboxContent) return;
+        lightboxContent.innerHTML = '';
+
+        if (type === 'image') {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = name || 'Image Preview';
+            lightboxContent.appendChild(img);
+        } else if (type === 'video') {
+            const video = document.createElement('video');
+            video.src = url;
+            video.controls = true;
+            video.autoplay = true;
+            lightboxContent.appendChild(video);
+        }
+
+        lightboxBackdrop.classList.add('active');
+    }
+
+    function closeMediaLightbox() {
+        if (!lightboxBackdrop) return;
+        lightboxBackdrop.classList.remove('active');
+        if (lightboxContent) {
+            const vid = lightboxContent.querySelector('video');
+            if (vid) vid.pause();
+            lightboxContent.innerHTML = '';
+        }
     }
 
     function scrollToBottom() {
@@ -55,7 +192,7 @@ const FridayChat = (function() {
 
         welcomeScreen.style.display = 'none';
         messages.forEach(msg => {
-            appendMessageUI(msg.role, msg.content, false, msg.id);
+            appendMessageUI(msg.role, msg.content, false, msg.id, msg.attachments);
         });
         scrollToBottom();
     }
@@ -298,9 +435,18 @@ const FridayChat = (function() {
         }, 10);
     }
 
-    function appendMessageUI(role, content, shouldScroll = true, msgId = null) {
+    function appendMessageUI(role, content, shouldScroll = true, msgId = null, attachments = null) {
         if (welcomeScreen) welcomeScreen.style.display = 'none';
         if (!messagesList) return null;
+
+        let attList = [];
+        if (attachments) {
+            if (typeof attachments === 'string' && attachments.trim()) {
+                try { attList = JSON.parse(attachments); } catch (e) { attList = []; }
+            } else if (Array.isArray(attachments)) {
+                attList = attachments;
+            }
+        }
 
         const row = document.createElement('div');
         row.className = `message-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
@@ -310,13 +456,57 @@ const FridayChat = (function() {
             const userWrapper = document.createElement('div');
             userWrapper.className = 'user-message-wrapper';
 
+            // Render attachment preview in user message
+            if (attList && attList.length > 0) {
+                const attContainer = document.createElement('div');
+                attContainer.className = 'message-attachments-container';
+
+                attList.forEach(att => {
+                    if (att.type === 'image') {
+                        const thumb = document.createElement('div');
+                        thumb.className = 'msg-attachment-thumb';
+                        thumb.title = `Click to zoom ${att.filename || 'image'}`;
+                        thumb.innerHTML = `<img src="${att.url}" alt="${att.filename || 'image'}">`;
+                        thumb.addEventListener('click', () => {
+                            openMediaLightbox('image', att.url, att.filename);
+                        });
+                        attContainer.appendChild(thumb);
+                    } else if (att.type === 'video') {
+                        const vidWrap = document.createElement('div');
+                        vidWrap.className = 'msg-attachment-video-wrap';
+                        vidWrap.innerHTML = `<video src="${att.url}" controls></video>`;
+                        attContainer.appendChild(vidWrap);
+                    } else {
+                        const isPdf = att.type === 'pdf' || (att.filename && att.filename.toLowerCase().endsWith('.pdf'));
+                        const icon = isPdf ? ICON_PDF : ICON_FILE_DOC;
+                        const card = document.createElement('a');
+                        card.className = `msg-attachment-card ${isPdf ? 'pdf-attachment-card' : ''}`;
+                        card.href = att.url;
+                        card.target = '_blank';
+                        card.download = att.filename || 'file';
+                        card.innerHTML = `
+                            <div class="file-icon">${icon}</div>
+                            <div class="file-info">
+                                <span class="file-title" title="${att.filename}">${att.filename}</span>
+                                <span class="file-meta">${isPdf ? 'PDF • ' : ''}${formatBytes(att.size)}</span>
+                            </div>
+                        `;
+                        attContainer.appendChild(card);
+                    }
+                });
+
+                userWrapper.appendChild(attContainer);
+            }
+
             const bubbleBox = document.createElement('div');
             bubbleBox.className = 'user-bubble-box';
 
-            const bubble = document.createElement('div');
-            bubble.className = 'user-bubble';
-            bubble.textContent = content;
-            bubbleBox.appendChild(bubble);
+            if (content && content.trim()) {
+                const bubble = document.createElement('div');
+                bubble.className = 'user-bubble';
+                bubble.textContent = content;
+                bubbleBox.appendChild(bubble);
+            }
 
             // ChatGPT-style Action Bar: Edit, Copy, Share
             const actionsBar = document.createElement('div');
@@ -348,14 +538,15 @@ const FridayChat = (function() {
             `;
             copyBtn.addEventListener('click', async () => {
                 try {
-                    await navigator.clipboard.writeText(bubble.textContent);
+                    const textContent = content || (attList.length > 0 ? attList.map(a => a.filename).join(', ') : '');
+                    await navigator.clipboard.writeText(textContent);
                     copyBtn.classList.add('copied');
                     copyBtn.innerHTML = `
                         <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         <span>Copied!</span>
                     `;
                     if (window.FridayAuth && window.FridayAuth.showToast) {
-                        window.FridayAuth.showToast('Prompt copied to clipboard');
+                        window.FridayAuth.showToast('Copied to clipboard');
                     }
                     setTimeout(() => {
                         copyBtn.classList.remove('copied');
@@ -380,7 +571,8 @@ const FridayChat = (function() {
                 <span>Share</span>
             `;
             shareBtn.addEventListener('click', () => {
-                openShareModal(bubble.textContent);
+                const shareText = content || (attList.length > 0 ? `Shared attachments: ${attList.map(a => a.filename).join(', ')}` : '');
+                openShareModal(shareText);
             });
 
             actionsBar.appendChild(editBtn);
@@ -509,17 +701,75 @@ const FridayChat = (function() {
     }
 
     function init() {
+        // Plus attachment button handler
+        if (attachBtn && fileInput) {
+            attachBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    uploadFiles(e.target.files);
+                    fileInput.value = '';
+                }
+            });
+        }
+
+        // Drag & Drop handling onto chat container or form
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, (e) => e.preventDefault(), false);
+        });
+
+        document.body.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                uploadFiles(e.dataTransfer.files);
+            }
+        });
+
+        // Clipboard paste handling (Ctrl + V for images/files)
+        document.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData)?.items;
+            if (items) {
+                const files = [];
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].kind === 'file') {
+                        const file = items[i].getAsFile();
+                        if (file) files.push(file);
+                    }
+                }
+                if (files.length > 0) {
+                    uploadFiles(files);
+                }
+            }
+        });
+
+        // Lightbox modal close handlers
+        if (lightboxCloseBtn) {
+            lightboxCloseBtn.addEventListener('click', closeMediaLightbox);
+        }
+        if (lightboxBackdrop) {
+            lightboxBackdrop.addEventListener('click', (e) => {
+                if (e.target === lightboxBackdrop) closeMediaLightbox();
+            });
+        }
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && lightboxBackdrop && lightboxBackdrop.classList.contains('active')) {
+                closeMediaLightbox();
+            }
+        });
+
         if (userInput) {
             userInput.addEventListener('input', () => {
                 userInput.style.height = 'auto';
                 userInput.style.height = Math.min(userInput.scrollHeight, 180) + 'px';
-                if (sendBtn) sendBtn.disabled = userInput.value.trim() === '';
+                updateSendButtonState();
             });
 
             userInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (userInput.value.trim() && sendBtn && !sendBtn.disabled) {
+                    if ((userInput.value.trim() || queuedAttachments.length > 0) && sendBtn && !sendBtn.disabled) {
                         if (chatForm) chatForm.dispatchEvent(new Event('submit'));
                     }
                 }
@@ -531,18 +781,23 @@ const FridayChat = (function() {
                 e.preventDefault();
                 if (!userInput) return;
                 const message = userInput.value.trim();
-                if (!message) return;
+                const attachmentsToSend = [...queuedAttachments];
+
+                if (!message && attachmentsToSend.length === 0) return;
 
                 // Prime speech synthesis during user gesture
                 if (window.speechSynthesis && window.FridayVoice && window.FridayVoice.isVoiceEnabled()) {
                     try { window.speechSynthesis.resume(); } catch (err) {}
                 }
 
+                // Reset input and queue
                 userInput.value = '';
                 userInput.style.height = 'auto';
+                queuedAttachments = [];
+                renderAttachmentsPreview();
                 if (sendBtn) sendBtn.disabled = true;
 
-                const userRow = appendMessageUI('user', message, true);
+                const userRow = appendMessageUI('user', message, true, null, attachmentsToSend);
                 showTypingIndicator();
 
                 const activeSid = window.FridaySessions ? window.FridaySessions.getActiveSessionId() : null;
@@ -553,7 +808,8 @@ const FridayChat = (function() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             session_id: activeSid,
-                            message: message
+                            message: message,
+                            attachments: attachmentsToSend
                         })
                     });
 

@@ -28,3 +28,7 @@ __pycache__/
 # OS files
 Thumbs.db
 .DS_Store
+
+# User Uploads
+static/uploads/*
+!static/uploads/.gitkeep
